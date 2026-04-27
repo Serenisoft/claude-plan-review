@@ -152,24 +152,86 @@ plan-loop-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
 
 ## Recommended Codex configuration
 
-Drop the following into `~/.codex/config.toml` (skip if you already have
-your own preferences):
-
 ```toml
+# ~/.codex/config.toml
 model = "gpt-5.5"
 model_reasoning_effort = "high"
-sandbox_mode = "danger-full-access"
-approval_policy = "never"
 ```
 
 - **`gpt-5.5` with `high` effort** is the sweet spot for adversarial plan
-  review — `xhigh` is overkill for plan-sized inputs and roughly 2–4x more
-  reasoning tokens. `medium` misses subtler edge cases.
-- **`danger-full-access` + `never`** disables Codex's bubblewrap sandbox.
-  This is reasonable here because Codex is reading a markdown plan, not
-  executing arbitrary code. If you prefer the sandbox enabled, you may
-  need to install `bubblewrap` and ensure user namespaces are allowed by
-  the kernel.
+  review — `xhigh` is overkill for plan-sized inputs (roughly 2–4× more
+  reasoning tokens for diminishing returns), and `medium` misses subtler
+  edge cases.
+- **Sandbox and approval settings** are deliberately omitted from this
+  recommendation. Read [SECURITY](#security) below before changing them.
+
+## Security
+
+### Threat model
+
+claude-plan-review pipes plan text directly into a Codex session. The
+plan content is **untrusted user input** from the perspective of the
+Codex process: it can come from a user typing freely, from Claude
+synthesizing prior conversation that itself contained content from
+external sources (a web fetch, a third-party document, a previous
+session's compaction), or from any other channel that influenced the
+conversation Claude is summarizing.
+
+A malicious or accidentally adversarial plan can attempt to:
+
+1. **Forge the `PLAN OK` verdict** to make the loop falsely approve an
+   unsafe plan
+2. **Issue tool calls** to make Codex run shell commands, read secrets,
+   or write files — if the Codex sandbox is disabled
+3. **Manipulate the reviewer's framing** so that real risks go
+   unreported
+
+### Mitigations in this version (v0.2.0+)
+
+- The reviewer prompt explicitly marks `<plan>` content as untrusted and
+  forbids following instructions found there.
+- The verdict is signaled via a per-run random token that is generated
+  outside the plan content and embedded in the reviewer prompt. The
+  parser only accepts a verdict line containing the exact token, so a
+  plan author cannot forge a verdict that the script will accept.
+- The slash command's `allowed-tools` is scoped to a small set of
+  filesystem and runner commands — not `Bash(*)`. Prompt-injection
+  cannot drive Claude into arbitrary shell execution via this command.
+- `plan-loop-step.sh` validates the workdir's owner and exact mode
+  (700) before writing, refuses symlink targets, and uses noclobber
+  redirection.
+
+### Sandbox guidance
+
+The Codex CLI runs in a bubblewrap-based sandbox by default
+(`approval_policy = "on-request"`, `sandbox_mode = "workspace-write"` or
+similar — see [Codex docs](https://developers.openai.com/codex/agent-approvals-security)).
+**Keep these defaults if you can.** They prevent Codex from running
+shell commands or modifying files outside the workspace without your
+explicit approval — even if a malicious plan tries to issue tool calls.
+
+If your kernel's user-namespace restrictions block bubblewrap (you'll
+see `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`),
+you have two options:
+
+1. **Recommended:** install `bubblewrap` and enable unprivileged user
+   namespaces:
+   ```bash
+   sudo apt install bubblewrap
+   sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+   ```
+2. **Only if you accept the risk:** disable the sandbox in
+   `~/.codex/config.toml`:
+   ```toml
+   sandbox_mode = "danger-full-access"
+   approval_policy = "never"
+   ```
+   This makes Codex run with full access to your filesystem and
+   network as the invoking user. Combined with the prompt-injection
+   surface above, a malicious plan could in principle achieve code
+   execution. The token-based verdict and `allowed-tools` scoping
+   reduce — but do not eliminate — the risk. Use this only on personal
+   development boxes where you fully control the plan input.
 
 ## How it works
 

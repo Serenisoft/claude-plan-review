@@ -1,7 +1,7 @@
 ---
 description: Iterative plan review where Codex (gpt-5.5 high) acts as an adversarial reviewer. Converges on "PLAN OK" or stops at max 5 iterations.
 argument-hint: [optional feature description or focus instruction]
-allowed-tools: Bash(*), Read, Write, Edit
+allowed-tools: Bash(mktemp:*), Bash(chmod:*), Bash(plan-loop-step:*), Bash(rm:*), Bash(cat:*), Bash(ls:*), Bash(echo:*), Read, Write
 ---
 
 You will draft a thorough plan and iterate on it with Codex acting as an

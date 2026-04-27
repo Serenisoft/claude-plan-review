@@ -6,10 +6,11 @@
 #   scripts/plan-loop-step.sh   → ~/.local/bin/plan-loop-step
 #
 # Usage:
-#   bash install.sh              install
-#   bash install.sh --uninstall  remove symlinks
+#   bash install.sh              install (refuses to overwrite foreign files)
+#   bash install.sh --force      install, overwriting any existing target
+#   bash install.sh --uninstall  remove symlinks (only ours)
 #
-# Idempotent — safe to re-run.
+# Idempotent — safe to re-run as long as targets are our own symlinks.
 
 set -euo pipefail
 
@@ -19,18 +20,97 @@ BIN_DST="$HOME/.local/bin"
 SLASH_LINK="$COMMANDS_DST/plan-loop.md"
 BIN_LINK="$BIN_DST/plan-loop-step"
 
+SLASH_TARGET="$REPO_DIR/commands/plan-loop.md"
+BIN_TARGET="$REPO_DIR/scripts/plan-loop-step.sh"
+
+FORCE=0
+
 uninstall() {
-    echo "→ Removing symlinks"
-    [[ -L "$SLASH_LINK" ]] && rm -v "$SLASH_LINK"
-    [[ -L "$BIN_LINK" ]]   && rm -v "$BIN_LINK"
-    echo "Done. Reload Claude Code (/reload-plugins or restart) to pick up the change."
+    echo "→ Removing our symlinks (only if they point into this repo)"
+    for path in "$SLASH_LINK" "$BIN_LINK"; do
+        if [[ -L "$path" ]]; then
+            target="$(readlink "$path")"
+            case "$target" in
+                "$REPO_DIR"/*)
+                    rm -v "$path"
+                    ;;
+                *)
+                    echo "  $path points to $target — not ours, leaving alone" >&2
+                    ;;
+            esac
+        fi
+    done
+    echo "Done. Reload Claude Code (restart) to pick up the change."
     exit 0
 }
 
-[[ "${1:-}" == "--uninstall" ]] && uninstall
+# Verify a destination path is safe to overwrite.
+# Refuses if the path is:
+#   - a regular file (not a symlink) — could be the user's own work
+#   - a symlink pointing somewhere outside our repo — could be another tool's
+# Allows if:
+#   - path doesn't exist
+#   - path is a symlink already pointing into our repo (idempotent re-run)
+#   - --force was passed
+check_dest_safe() {
+    local path="$1"
+    local expected_target="$2"
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+        return 0
+    fi
+    if [[ -L "$path" ]]; then
+        local current_target
+        current_target="$(readlink "$path")"
+        if [[ "$current_target" == "$expected_target" ]]; then
+            return 0
+        fi
+        case "$current_target" in
+            "$REPO_DIR"/*)
+                # Old symlink into our repo, fine to update
+                return 0
+                ;;
+        esac
+        if (( FORCE == 1 )); then
+            return 0
+        fi
+        cat >&2 <<EOF
+ERROR: $path is a symlink pointing to:
+  $current_target
+
+That's not part of this repo. Refusing to overwrite without --force.
+
+If you want to keep the existing target, do nothing.
+If you want to install claude-plan-review here, re-run with: bash install.sh --force
+EOF
+        exit 1
+    fi
+    # Path exists and is NOT a symlink — refuse hard
+    if (( FORCE == 1 )); then
+        echo "  WARNING: $path exists as a regular file/dir; --force given, will overwrite"
+        return 0
+    fi
+    cat >&2 <<EOF
+ERROR: $path exists and is not a symlink.
+
+Refusing to overwrite a regular file/directory. If this was an earlier
+install or a file you don't need, remove it first:
+  rm "$path"
+Then re-run install. Or use --force to overwrite.
+EOF
+    exit 1
+}
+
+# --- Argument parsing ---
+case "${1:-}" in
+    --uninstall) uninstall ;;
+    --force)     FORCE=1 ;;
+    "")          ;;
+    *)           echo "Unknown argument: $1" >&2; exit 2 ;;
+esac
 
 echo "=== claude-plan-review install ==="
 echo "Repo: $REPO_DIR"
+(( FORCE == 1 )) && echo "Mode: --force (will overwrite existing targets)"
 echo
 
 # --- Prerequisite checks ---
@@ -80,22 +160,30 @@ EOF
         ;;
 esac
 
+# --- Safety check destinations ---
+echo
+echo "→ Checking destination paths"
+check_dest_safe "$SLASH_LINK" "$SLASH_TARGET"
+check_dest_safe "$BIN_LINK" "$BIN_TARGET"
+echo "  destinations safe to write"
+
 # --- Create symlinks ---
 echo
 echo "→ Creating symlinks"
 mkdir -p "$COMMANDS_DST" "$BIN_DST"
-ln -sfn "$REPO_DIR/commands/plan-loop.md" "$SLASH_LINK"
-echo "  $SLASH_LINK → $REPO_DIR/commands/plan-loop.md"
-ln -sfn "$REPO_DIR/scripts/plan-loop-step.sh" "$BIN_LINK"
-echo "  $BIN_LINK → $REPO_DIR/scripts/plan-loop-step.sh"
+ln -sfn "$SLASH_TARGET" "$SLASH_LINK"
+echo "  $SLASH_LINK → $SLASH_TARGET"
+ln -sfn "$BIN_TARGET" "$BIN_LINK"
+echo "  $BIN_LINK → $BIN_TARGET"
 
 # --- Verify ---
 echo
 echo "→ Verifying install"
 if [[ -L "$SLASH_LINK" ]] && [[ -L "$BIN_LINK" ]]; then
-    # plan-loop-step prints usage to stderr (correct), so capture both streams.
-    # We tolerate exit code 2 (user error) since that's exactly what no-args triggers.
-    if "$BIN_LINK" 2>&1 1>/dev/null | grep -q "Usage:"; then
+    # plan-loop-step prints usage to stderr and exits 2 on no-args.
+    # Capture both streams into a variable so we don't fight pipefail.
+    verify_output="$("$BIN_LINK" 2>&1 || true)"
+    if [[ "$verify_output" == *"Usage:"* ]]; then
         echo "  plan-loop-step prints usage: OK"
     else
         echo "  WARNING: plan-loop-step did not print usage as expected"
@@ -107,13 +195,15 @@ cat <<EOF
 === Install complete ===
 
 Next steps:
-  1. Reload Claude Code (/reload-plugins or restart).
+  1. Restart Claude Code (slash commands are loaded at startup, not at /reload-plugins).
   2. Verify the slash command is available: /plan-loop
-  3. (Optional) Configure ~/.codex/config.toml:
+  3. Configure ~/.codex/config.toml:
         model = "gpt-5.5"
         model_reasoning_effort = "high"
-        sandbox_mode = "danger-full-access"
-        approval_policy = "never"
+        # sandbox_mode and approval_policy: see SECURITY section in README.
+        # The default Codex sandbox is recommended; only switch to
+        # danger-full-access if you understand the prompt-injection
+        # implications and accept the risk for your environment.
   4. Try it:
         /plan-loop add expiry dates to short URLs
 
