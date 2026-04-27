@@ -1,13 +1,18 @@
 # claude-plan-review
 
-> **Note:** Personal Serenisoft tool. No support guarantees, response time may
-> be days or weeks. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
+**Iteratively pressure-test Claude Code plans with Codex as the adversarial reviewer — until both models agree the plan is ready.**
 
-A `/plan-loop` slash command for [Claude Code](https://claude.com/claude-code)
-that drives an iterative plan review against [OpenAI Codex](https://github.com/openai/codex).
-Claude drafts the plan, Codex acts as the adversarial reviewer, Claude
-revises, and the loop continues until Codex returns `PLAN OK` or you hit
-the iteration cap.
+The official OpenAI [`codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)
+reviews git diffs only. Plans that live in chat — which is how plans
+actually get drafted during interactive sessions with Claude — cannot
+be adversarially reviewed by the plugin at all. And even if you write
+the plan to a file, each plugin call starts a fresh thread, so the
+reviewer keeps rediscovering the same concerns and never confirms
+they're actually fixed.
+
+`claude-plan-review` closes both gaps by piping the plan directly into
+`codex exec` over a resumed session, so the reviewer keeps full context
+between rounds and `PLAN OK` becomes a meaningful convergence signal.
 
 ```
 /plan-loop add expiry dates to short URLs
@@ -18,6 +23,9 @@ the iteration cap.
   iter 3  → Claude revises again
   iter 4  → Codex: PLAN OK
 ```
+
+> **Note:** Personal Serenisoft tool. No support guarantees, response time may
+> be days or weeks. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Why this exists
 

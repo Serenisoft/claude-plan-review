@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-04-27
+
+### Changed
+- README opens with a one-paragraph pitch (problem + how we solve it)
+  instead of leading with the "personal tool" disclaimer. The disclaimer
+  moved below the example, where it's still visible without being the
+  first thing visitors read.
+
 ## [0.1.2] — 2026-04-27
 
 ### Changed
@@ -64,7 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Serenisoft/claude-plan-review/releases/tag/v0.1.0
