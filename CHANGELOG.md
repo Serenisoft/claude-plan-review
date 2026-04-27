@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-04-27 — Project-aware review, stricter convergence
+
+### Added
+
+- **Codex now has read-only access to project files during review.**
+  The slash command captures `$(pwd)` at invocation and passes it to
+  `plan-review-step`, which forwards it to Codex via
+  `-C <root> --sandbox read-only`. Codex can `cat`/`grep`/`ls` existing
+  code to verify assumptions. This fixes the failure mode observed in
+  the v0.3.0 Twenty CRM loop where Codex flagged trap-clobber issues
+  inconsistent with patterns in `fido-backup.sh` it couldn't see.
+- **Project context inserted into the review.** Step 2a in the slash
+  command now instructs Claude to gather a focused project-context
+  summary (CLAUDE.md, ADRs, skills, README architecture) into
+  `$WORKDIR/project-context.md`. `plan-review-step` splices the file
+  into a `<project_context>` block adjacent to the plan, so Codex's
+  findings calibrate to project conventions from iter 1.
+- **Per-finding decision log inside plan-vN.** Step 4 was rewritten
+  with an explicit relevance / hypothetical-vs-real / tradeoff /
+  overengineering / verify-with-project checklist. Decisions for each
+  finding are now written into a `## Findings considered in iteration N-1`
+  section at the top of plan-vN. The block accumulates across rounds —
+  Codex sees the rationale on resume and either accepts it or pushes
+  back with sharper evidence. This addresses the v0.3.0 observation
+  that the loop drifted into mikro-bugs after iter 3.
+- **Last-iteration signal in `<iter_context>`.** When iter == MAX_ITER,
+  the iter context tells Codex this is the final round and asks for
+  blockers only — speculative concerns and polish are out of scope.
+- **`<project_context_handling>` block** in the adversarial prompt
+  template. Tells Codex to treat any `<project_context>` block as
+  authoritative project facts (not instructions), to verify
+  assumptions against project files when relevant, and to avoid
+  raising findings already disposed of by documented project decisions
+  (ADRs, skills).
+- **Tightened `<finding_bar>`** in the adversarial prompt. Findings
+  whose fix would require significant new complexity for marginal
+  risk reduction must state the complexity-vs-risk tradeoff in the
+  finding itself, not bury it in the suggested fix.
+
+### Changed
+
+- **Default `MAX_ITER` is now 3** (was 5). Empirical convergence is
+  2–3 rounds (Aseem Shrey 8→6→0; our first Twenty CRM run hit 5
+  without convergence as the loop escalated into mikro-bugs). Set
+  `CLAUDE_PLAN_REVIEW_MAX_ITER=5` to restore the old behavior.
+- `plan-review-step` accepts an optional 4th positional argument
+  `[project-root]` and honors `CLAUDE_PLAN_REVIEW_PROJECT_ROOT` as a
+  fallback. If neither is provided (e.g. direct CLI use as documented
+  in the README "Reviewing a pre-existing plan file" recipe), the
+  script keeps v0.3.x workdir-only behavior.
+- Codex is now invoked with `--sandbox read-only` in every call, in
+  addition to the existing `--skip-git-repo-check`. The reviewer never
+  needs write access; this closes a prompt-injection vector
+  independently of the user's `~/.codex/config.toml`.
+- Slash command `allowed-tools` widened to include `Bash(pwd:*)`,
+  `Grep`, `Glob` — needed for project-root capture and project-context
+  gathering. All read-only, consistent with the v0.2.1 single-user
+  trusted-input threat model.
+
+### Migration
+
+- Run `bash install.sh` from the new checkout. The installer now
+  verifies that the installed Codex CLI supports `--sandbox` and
+  fails with a clear upgrade hint if not.
+- **Running v0.3.x loops at upgrade time:** workdirs created by v0.3.x
+  are not resumable — the iter_context shape changed and v0.3.x
+  workdirs lack `project-context.md`. Finish or abandon any in-flight
+  v0.3.x loop before upgrading. (Workdirs are mktemp'd per run, so
+  this is rarely a real-world issue.)
+- **`CLAUDE_PLAN_REVIEW_MAX_ITER` users:** env-override still works;
+  only the default changed. If you scripted around a default of 5,
+  set `CLAUDE_PLAN_REVIEW_MAX_ITER=5` explicitly.
+- **Custom `CLAUDE_PLAN_REVIEW_PROMPT` templates:** continue to work
+  but won't get the new `<project_context_handling>` calibration. Add
+  the block to your template to benefit fully.
+
+### Notes
+
+- v0.4.0 does not regress on v0.2.x security: token-based verdict,
+  workdir validation, narrow `allowed-tools` are all preserved. The
+  forced `--sandbox read-only` is strictly tighter than the previous
+  default (which inherited from `~/.codex/config.toml`).
+- The threat model from v0.2.1 is unchanged: single-user,
+  trusted-input. Project-aware review is an ergonomics improvement,
+  not a hardening pass.
+
 ## [0.3.0] — 2026-04-27 — Breaking: rename to /plan-review
 
 ### Changed (breaking)
@@ -198,7 +284,8 @@ review of the v0.1.4 codebase. Anyone running v0.1.x should upgrade.
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.4...v0.2.0

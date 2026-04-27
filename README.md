@@ -63,6 +63,17 @@ claude-plan-review captures Codex's session id from iter 1 and uses
 `codex exec resume <id>` for iters 2..N, so the reviewer keeps full
 context and can give a meaningful "no remaining or new blockers" verdict.
 
+### Bonus: project-aware review (v0.4+)
+
+Codex sees the project. The slash command captures `$(pwd)` and passes
+it to `codex exec -C <root> --sandbox read-only`, so the reviewer can
+read existing code, ADRs, and conventions while reviewing your plan.
+Findings calibrate to *your* codebase — not generic best-practices.
+Combined with a `<project_context>` block (CLAUDE.md / skills / ADRs
+summarized by Claude into the prompt), this fixes the failure mode
+where Codex flags issues that contradict patterns already established
+in your project.
+
 ## Prerequisites
 
 | Tool | Why | How to install |
@@ -146,9 +157,19 @@ run `plan-review-step` directly:
 WORKDIR=$(mktemp -d -t plan-review-XXXXXXXX)
 chmod 700 "$WORKDIR"
 cp my-existing-plan.md "$WORKDIR/plan-v1.md"
-plan-review-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
+
+# Optional but recommended: give Codex read-only access to your project
+plan-review-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md" "$(pwd)"
+
+# Or without project access:
+# plan-review-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
+
 # then iterate manually with plan-v2.md, plan-v3.md, etc.
 ```
+
+**Optional:** to give Codex project context too, write a focused
+summary to `$WORKDIR/project-context.md` before iter 1. The script
+splices it into a `<project_context>` block automatically.
 
 ## Recommended Codex configuration
 
@@ -162,8 +183,9 @@ model_reasoning_effort = "high"
   review — `xhigh` is overkill for plan-sized inputs (roughly 2–4× more
   reasoning tokens for diminishing returns), and `medium` misses subtler
   edge cases.
-- **Sandbox and approval settings** are deliberately omitted from this
-  recommendation. Read [SECURITY](#security) below before changing them.
+- **Sandbox and approval settings:** v0.4+ runs Codex with
+  `--sandbox read-only` per call, regardless of your config. You don't
+  need to lower your default sandbox for plan-review specifically.
 
 ## Security
 
@@ -194,7 +216,7 @@ are:
 2. **Workdir mishaps** — the script writing into the wrong directory
    if a path is misconfigured.
 
-### Mitigations in v0.2.x
+### Mitigations
 
 - The reviewer prompt explicitly marks `<plan>` content as untrusted
   and forbids following instructions found there.
@@ -207,6 +229,12 @@ are:
 - `plan-review-step.sh` validates the workdir's owner and exact mode
   (700) before writing, refuses symlink targets, and uses noclobber
   redirection throughout.
+- **v0.4+:** every Codex invocation forces `--sandbox read-only`,
+  defense-in-depth against prompt-injection-induced tool use even if
+  the user's `~/.codex/config.toml` is configured loosely.
+- **v0.4+:** when a project root is provided, it must be owned by the
+  current user (validated via `stat`) — preventing accidental
+  pointers at another user's project.
 
 ### Known limitations (cases the tool does NOT fully defend)
 
@@ -227,7 +255,9 @@ case so the project can decide whether v0.3+ should harden further.
 
 ### Sandbox guidance
 
-### Sandbox guidance
+> Note: as of v0.4 the slash command and `plan-review-step` always pass
+> `--sandbox read-only` per call, so most of this section applies to
+> *other* Codex use on your machine, not to plan-review specifically.
 
 The Codex CLI runs in a bubblewrap-based sandbox by default
 (`approval_policy = "on-request"`, `sandbox_mode = "workspace-write"` or
@@ -261,21 +291,33 @@ you have two options:
 
 ## How it works
 
-1. **Step 1** — Slash command creates a workdir with `mktemp -d -t plan-review-XXXXXXXX`
-   (mode 700, not world-readable).
-2. **Step 2** — Claude drafts `plan-v1.md` in the workdir.
-3. **Step 3 (iter 1)** — `plan-review-step` calls `codex exec` with the
-   adversarial prompt and the plan. Output is captured to `iter-1.txt`,
-   the Codex session id is grepped from the output and stored in
-   `.session-id`. Verdict (`PLAN_OK` or `FINDINGS`) is written to
-   `verdict-1.txt`.
-4. **Step 4 (iters 2..N)** — Claude reads `iter-N-1.txt`, judges each
-   finding, revises the plan to a new `plan-vN.md`, and runs
-   `plan-review-step` again. The script calls `codex exec resume <session-id>`
-   so Codex keeps full context of the prior rounds.
-5. **Step 5** — Loop ends on `PLAN OK` (last non-empty line, exact match)
-   or when iter 5 finishes with findings. The workdir is preserved as an
-   audit trail; you remove it manually with `rm -rf "$WORKDIR"`.
+1. **Step 1** — Slash command captures `$(pwd)` as `PROJECT_ROOT` and
+   creates a workdir with `mktemp -d -t plan-review-XXXXXXXX` (mode 700,
+   not world-readable).
+2. **Step 2a** — Claude reads `CLAUDE.md`, `.claude/skills/*/SKILL.md`,
+   ADRs, and the README architecture section, then writes a focused
+   project-context summary (200–600 words, scoped to the feature) to
+   `$WORKDIR/project-context.md`.
+3. **Step 2b** — Claude drafts `plan-v1.md` in the workdir, folding
+   project conventions directly into the plan where relevant.
+4. **Step 3 (iter 1)** — `plan-review-step` invokes
+   `codex exec --sandbox read-only --skip-git-repo-check -C $PROJECT_ROOT`
+   with the adversarial prompt + `<project_context>` block + plan via
+   stdin. Output is captured to `iter-1.txt`, the Codex session id is
+   grepped from the output and stored in `.session-id`. Verdict
+   (`PLAN_OK` or `FINDINGS`) is written to `verdict-1.txt`.
+5. **Step 4 (iters 2..N)** — Claude reads `iter-N-1.txt`, evaluates each
+   finding against an explicit checklist (relevant? real or hypothetical?
+   tradeoff? overengineered? verifiable against project files?), records
+   per-finding decisions in a `## Findings considered in iteration N-1`
+   section at the top of `plan-vN.md`, and runs `plan-review-step` again.
+   The script calls `codex exec resume <session-id>` (with the same
+   sandbox/cd flags) so Codex keeps full context across rounds and sees
+   the decision rationale on resume.
+6. **Step 5** — Loop ends on `PLAN OK` (last non-empty line, exact match
+   against the per-run verdict token) or when iter MAX_ITER finishes
+   with findings. The workdir is preserved as an audit trail; you
+   remove it manually with `rm -rf "$WORKDIR"`.
 
 ### Why resume between iterations
 
@@ -304,13 +346,24 @@ to the wrong thread and silently corrupt the review. We capture the
 explicit UUID from iter 1's output (`session id: <uuid>`) and pass it
 verbatim on every resume.
 
-### Why max 5 iterations
+### Why max 3 iterations (default)
 
-Reported convergence in the wild is 2–3 rounds typical. 5 is a safety
-ceiling against runaway token cost; if Codex still hasn't said `PLAN OK`
-after iter 5, the design likely has a deliberate tradeoff Codex won't
-accept (e.g. denial of an industry best practice) and you should review
-manually.
+Reported convergence in the wild is 2–3 rounds typical
+([Aseem Shrey: 8 → 6 → 0](https://aseemshrey.in/blog/claude-codex-iterative-plan-review/)).
+Our own first real loop hit 5 iterations without convergence, but
+inspection showed the loop had escalated from real design issues into
+mikro-bugs after iter 3 — the reviewer can't say "I'm done" so it keeps
+finding *something*, often something not worth fixing.
+
+v0.4 makes 3 the default. If your plan is unusually thorny and 3
+isn't enough, raise it via:
+
+```bash
+CLAUDE_PLAN_REVIEW_MAX_ITER=5 claude
+```
+
+Inside the slash command, the script tells Codex when it's the final
+round so the reviewer focuses on blockers rather than polish.
 
 ## Files in this repo
 

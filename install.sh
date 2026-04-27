@@ -143,6 +143,19 @@ EOF
 fi
 echo "  codex: $(codex --version 2>&1 | head -1)"
 
+# v0.4+ requires --sandbox flag (Codex v0.118+). Verify capability.
+if ! codex exec --help 2>&1 | grep -q -- '--sandbox'; then
+    cat >&2 <<EOF
+
+ERROR: your Codex CLI does not support the --sandbox flag.
+plan-review v0.4+ uses --sandbox read-only on every Codex call.
+
+Upgrade with: npm install -g @openai/codex@latest
+Minimum version: v0.118
+EOF
+    exit 1
+fi
+
 # claude CLI (warn but don't block — useful for non-Claude-Code users
 # who want to run plan-review-step manually)
 if command -v claude >/dev/null 2>&1; then
@@ -217,16 +230,20 @@ cat <<EOF
 
 === Install complete ===
 
+What's new in v0.4:
+  • Codex now gets read-only access to your project files during review
+    (slash command captures \$(pwd), passes it to codex via -C). Findings
+    calibrate to your codebase, not generic best-practices.
+  • Default MAX_ITER is 3 (was 5). Override: CLAUDE_PLAN_REVIEW_MAX_ITER=5.
+  • Codex always runs with --sandbox read-only regardless of your
+    config.toml — defense-in-depth for plan review specifically.
+
 Next steps:
   1. Restart Claude Code (slash commands are loaded at startup, not at /reload-plugins).
   2. Verify the slash command is available: /plan-review
-  3. Configure ~/.codex/config.toml:
+  3. Configure ~/.codex/config.toml (sandbox/approval are managed per-call now):
         model = "gpt-5.5"
         model_reasoning_effort = "high"
-        # sandbox_mode and approval_policy: see SECURITY section in README.
-        # The default Codex sandbox is recommended; only switch to
-        # danger-full-access if you understand the prompt-injection
-        # implications and accept the risk for your environment.
   4. Try it:
         /plan-review add expiry dates to short URLs
 
