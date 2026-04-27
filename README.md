@@ -167,39 +167,65 @@ model_reasoning_effort = "high"
 
 ## Security
 
-### Threat model
+### Who this tool is built for
 
-claude-plan-review pipes plan text directly into a Codex session. The
-plan content is **untrusted user input** from the perspective of the
-Codex process: it can come from a user typing freely, from Claude
-synthesizing prior conversation that itself contained content from
-external sources (a web fetch, a third-party document, a previous
-session's compaction), or from any other channel that influenced the
-conversation Claude is summarizing.
+claude-plan-review is built for the **single-user, trusted-input** case:
+you on your own machine, planning your own features, with plan text
+synthesized from your own conversation with Claude. Under that model,
+the protections in v0.2.x are roughly the right level — strict enough
+to handle the obvious failure modes, loose enough to stay fast and
+ergonomic.
 
-A malicious or accidentally adversarial plan can attempt to:
+If your situation is different (multi-user system, CI that runs this
+on inputs from issues/PRs, plans synthesized from web-fetched content
+or third-party documents), read **Known limitations** below before
+relying on it.
 
-1. **Forge the `PLAN OK` verdict** to make the loop falsely approve an
-   unsafe plan
-2. **Issue tool calls** to make Codex run shell commands, read secrets,
-   or write files — if the Codex sandbox is disabled
-3. **Manipulate the reviewer's framing** so that real risks go
-   unreported
+### Threat model (single-user mode — the supported case)
 
-### Mitigations in this version (v0.2.0+)
+The plan text passed into Codex is treated as untrusted within the
+review prompt: the reviewer is told to ignore instructions found inside
+the `<plan>` block. The main risks the tool actively defends against
+are:
 
-- The reviewer prompt explicitly marks `<plan>` content as untrusted and
-  forbids following instructions found there.
-- The verdict is signaled via a per-run random token that is generated
-  outside the plan content and embedded in the reviewer prompt. The
-  parser only accepts a verdict line containing the exact token, so a
-  plan author cannot forge a verdict that the script will accept.
+1. **Accidental verdict spoofing** — a plan or Codex's own reasoning
+   trace echoing the verdict format and tricking the parser into a
+   false `PLAN OK`.
+2. **Workdir mishaps** — the script writing into the wrong directory
+   if a path is misconfigured.
+
+### Mitigations in v0.2.x
+
+- The reviewer prompt explicitly marks `<plan>` content as untrusted
+  and forbids following instructions found there.
+- The verdict is signaled via a per-run random token embedded in the
+  reviewer prompt. The parser requires the verdict line to be the
+  **last non-empty line** of Codex output and to match the exact token
+  — a plan author cannot forge a verdict that gets accepted.
 - The slash command's `allowed-tools` is scoped to a small set of
-  filesystem and runner commands — not `Bash(*)`. Prompt-injection
-  cannot drive Claude into arbitrary shell execution via this command.
+  filesystem and runner commands — not `Bash(*)`.
 - `plan-loop-step.sh` validates the workdir's owner and exact mode
   (700) before writing, refuses symlink targets, and uses noclobber
-  redirection.
+  redirection throughout.
+
+### Known limitations (cases the tool does NOT fully defend)
+
+The current design assumes you're on a single-user machine with no
+hostile local actor. If those assumptions don't hold, these are
+unaddressed:
+
+| Concern | Realistic when |
+|---------|----------------|
+| Token can be observed in `iter-N.txt` after each round and forged in the next iteration's plan | A genuinely adversarial plan author iterating against you over a series of rounds — unlikely in personal use, real in CI/multi-user contexts |
+| Slash-command `allowed-tools` includes `Read`, `Write`, `rm`, `chmod`, `cat`, `echo`, `ls` | Prompt injection from a third-party document or webpage that Claude pulled into the conversation could ask Claude (not Codex) to misuse these |
+| Installer's symlink-into-repo check is lexical, not canonical | Attacker has placed a symlink in the repo path before you ran `install.sh` — requires prior write access to your filesystem |
+| WORKDIR path validated, but writes go through the original (non-canonicalized) string | A symlink-parent race during script execution — requires concurrent write access to your `/tmp` |
+
+If you operate in a context where any of these are realistic, please
+either skip claude-plan-review or open an issue describing your use
+case so the project can decide whether v0.3+ should harden further.
+
+### Sandbox guidance
 
 ### Sandbox guidance
 

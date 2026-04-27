@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-27
+
+### Fixed
+
+- **Verdict parser correctness bug.** The v0.2.0 parser used
+  `grep -Fxq` to scan the whole Codex output for the verdict line, and
+  checked `PLAN_OK` before `FINDINGS`. If Codex echoed the verdict
+  format anywhere in its reasoning trace (e.g. *"an example verdict
+  line is `<<VERDICT-X>> PLAN_OK`"*), the parser could pick that up
+  and exit 0 even when Codex's actual final verdict was `FINDINGS`.
+  v0.2.1 requires the verdict to be the **last non-empty line** of
+  output, matching exactly. This is a real correctness issue, not just
+  hardening — a plan does not need to be adversarial for the bug to
+  fire.
+- `set +C` after the token write disabled noclobber for the rest of
+  the script, contradicting the comments. Removed the redundant
+  `set -C`/`set +C` toggles; `set -o noclobber` at the top of the
+  script now stays in effect for all writes.
+
+### Changed
+
+- README "Security" section rewritten to be honest about who the tool
+  is built for (single-user, trusted-input). New "Known limitations"
+  table lists what v0.2.x does NOT defend against and which use cases
+  are realistically affected. Multi-user / CI / web-fetched-context
+  users are pointed at the limitations before they rely on the tool.
+
+### Notes for v0.1.x and v0.2.0 users
+
+This release does not introduce new functionality. Upgrade to fix the
+verdict-parser correctness bug; the rest is documentation honesty.
+
 ## [0.2.0] — 2026-04-27 — Security release
 
 This release addresses five security findings from a Codex adversarial
@@ -133,7 +165,8 @@ review of the v0.1.4 codebase. Anyone running v0.1.x should upgrade.
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.2...v0.1.3

@@ -134,10 +134,8 @@ if (( ITER == 1 )); then
         echo "ERROR: failed to generate verdict token" >&2
         exit 3
     }
-    # Use noclobber-safe write
-    set -C
+    # noclobber is set globally at script top — `>` will refuse to overwrite
     printf '%s\n' "$VERDICT_TOKEN" > "$TOKEN_FILE"
-    set +C
     chmod 600 "$TOKEN_FILE"
 else
     [[ -f "$TOKEN_FILE" ]] || {
@@ -192,9 +190,7 @@ if (( ITER == 1 )); then
         echo "See $OUTPUT for full output" >&2
         exit 3
     fi
-    set -C
     printf '%s\n' "$SESSION_ID" > "$SESSION_FILE"
-    set +C
     chmod 600 "$SESSION_FILE"
     echo "  session-id: $SESSION_ID" >&2
 else
@@ -216,41 +212,38 @@ fi
 chmod 600 "$OUTPUT"
 
 # --- Verdict parsing ---
-# We accept ONLY a verdict line that matches:
+# We accept ONLY the verdict line as the LAST non-empty line of the
+# Codex output, matching exactly one of:
 #   <<VERDICT-{TOKEN}>> PLAN_OK
-# or:
 #   <<VERDICT-{TOKEN}>> FINDINGS
 #
-# The token is fresh per run and never seen by the plan author, so a
-# malicious plan cannot forge a verdict line that grep accepts. We scan
-# the whole output (not just the last line) so position-sensitive
-# injections don't matter.
+# Last-line matching avoids a real correctness bug: if Codex echoes the
+# verdict format in its reasoning (e.g. "an example verdict line is
+# `<<VERDICT-X>> PLAN_OK`"), a free-text scan would pick that up before
+# the actual verdict. The reviewer prompt explicitly tells Codex to put
+# the verdict line last, and we enforce that.
 EXPECTED_PLAN_OK="${VERDICT_MARKER} PLAN_OK"
 EXPECTED_FINDINGS="${VERDICT_MARKER} FINDINGS"
 
-if grep -Fxq "$EXPECTED_PLAN_OK" "$OUTPUT"; then
-    set -C
+LAST_NONEMPTY="$(awk 'NF { last = $0 } END { print last }' "$OUTPUT" | sed 's/[[:space:]]*$//')"
+
+if [[ "$LAST_NONEMPTY" == "$EXPECTED_PLAN_OK" ]]; then
     printf 'PLAN_OK\n' > "$VERDICT"
-    set +C
     chmod 600 "$VERDICT"
     echo "  verdict: PLAN OK (iter $ITER)" >&2
     exit 0
-elif grep -Fxq "$EXPECTED_FINDINGS" "$OUTPUT"; then
-    set -C
+elif [[ "$LAST_NONEMPTY" == "$EXPECTED_FINDINGS" ]]; then
     printf 'FINDINGS\n' > "$VERDICT"
-    set +C
     chmod 600 "$VERDICT"
     echo "  verdict: findings (iter $ITER) — see $OUTPUT" >&2
     exit 1
 else
-    # Reviewer did not emit a valid verdict line at all. Could be a Codex
-    # error, a token-substitution failure, or a malformed reply. Treat as
-    # findings to be safe.
-    set -C
+    # Last line didn't match a valid verdict. Treat as findings to be safe;
+    # the user should inspect iter-N.txt and decide whether to retry.
     printf 'NO_VERDICT_LINE\n' > "$VERDICT"
-    set +C
     chmod 600 "$VERDICT"
-    echo "  verdict: no valid verdict line found (iter $ITER) — see $OUTPUT" >&2
+    echo "  verdict: last non-empty line is not a valid verdict (iter $ITER)" >&2
+    echo "  last line was: ${LAST_NONEMPTY:0:80}" >&2
     echo "  expected one of: $EXPECTED_PLAN_OK | $EXPECTED_FINDINGS" >&2
     exit 1
 fi
