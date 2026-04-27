@@ -1,0 +1,15 @@
+# Workdir output from plan-loop runs (when run from inside this repo)
+/tmp/
+plan-loop-*/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Local-only overrides
+.env
+.env.local
+*.local
