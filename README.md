@@ -96,18 +96,43 @@ not on file change) and try:
 /plan-loop add a "copy link" button to the link detail page
 ```
 
-### What goes in `$ARGUMENTS`
+### Three ways to invoke
 
-`$ARGUMENTS` is the **feature description**, not the plan. Claude drafts
-plan-v1 from this short description; you don't paste a multi-paragraph
-plan into the slash command. Examples:
+The `/plan-loop` command works in three modes. Pick the one that fits
+your situation.
 
-- `/plan-loop add expiry dates to short URLs`
-- `/plan-loop migrate auth from sessions to JWT`
-- `/plan-loop split the monolith billing service into per-customer workers`
+#### A — Discuss first, then review (most common in practice)
+You and Claude have already been talking about a feature. Claude has a
+plan in mind from the conversation. You want it reviewed.
+```
+[20 min of conversation about the feature, edge cases, options...]
+[Claude proposes a plan]
+/plan-loop
+```
+Claude uses the conversation as the basis for plan-v1. `$ARGUMENTS` is
+empty.
 
-If you already have a plan written somewhere and just want it reviewed,
-manually copy it to the workdir and run `plan-loop-step` directly:
+#### B — Jump straight to planning (fastest)
+You know what you want. No back-and-forth needed first.
+```
+/plan-loop add expiry dates to short URLs
+```
+Claude drafts plan-v1 from scratch based on the feature description.
+
+#### C — Discuss, then focus the review (hybrid)
+You've talked it through, but you know exactly where you want Codex to
+push hardest.
+```
+[conversation about the feature]
+/plan-loop especially scrutinize the rollout strategy and security
+```
+Claude uses the conversation as the basis for plan-v1, with `$ARGUMENTS`
+as a weighted focus area for both the plan and the review.
+
+### Reviewing a pre-existing plan file
+
+If your plan is already written somewhere, skip the slash command and
+run `plan-loop-step` directly:
 
 ```bash
 WORKDIR=$(mktemp -d -t plan-loop-XXXXXXXX)

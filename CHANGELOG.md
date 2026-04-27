@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-04-27
+
+### Changed
+- Slash command and README now document all three legitimate invocation
+  patterns:
+  - **A** — discuss with Claude first, then `/plan-loop` with no args
+    (Claude uses conversation context for plan-v1) — most common in
+    practice
+  - **B** — `/plan-loop <feature>` for direct invocation with no prior
+    conversation
+  - **C** — `/plan-loop <focus instruction>` after discussion, where the
+    argument weights the review focus
+- Slash command frontmatter `argument-hint` updated to reflect that the
+  argument is optional.
+- Routing logic added to the slash command so Claude can detect which
+  mode it's in (empty arg + prior conversation, focus phrasing, feature
+  phrasing) and act accordingly.
+
 ## [0.1.1] — 2026-04-27
 
 ### Changed
@@ -46,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Serenisoft/claude-plan-review/releases/tag/v0.1.0
