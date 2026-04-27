@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-04-27
+
+### Changed
+- README: lead with the fundamental gap (plugin reviews files only, not
+  plans in chat) instead of the secondary point about resume continuity.
+  Restructured "Why this exists" with a primary section on the file-vs-chat
+  gap and a "Bonus" section on context-preserving resume.
+- README: clarify that `$ARGUMENTS` is the feature description (Claude
+  drafts the plan), not a pre-written plan. Added an example flow for
+  reviewing an existing plan file via direct `plan-loop-step` invocation.
+- README: install step now says "restart Claude Code" explicitly — slash
+  commands are registered at startup, `/reload-plugins` does not pick
+  them up.
+
 ## [0.1.0] — 2026-04-27
 
 ### Added
@@ -32,5 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Serenisoft/claude-plan-review/releases/tag/v0.1.0

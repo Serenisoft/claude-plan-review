@@ -21,11 +21,29 @@ the iteration cap.
 
 ## Why this exists
 
+### The fundamental gap: Codex plugin only reviews files, not plans in chat
+
 The official [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)
-plugin is excellent for **code review** but does not preserve context
-between calls — its `/codex:adversarial-review` starts a fresh thread on
-each invocation. That works fine when the input is a diff, but it doesn't
-work for iterative *plan* review:
+plugin's `/codex:review` and `/codex:adversarial-review` commands operate
+on **git diffs**. They have no input mode for "the plan Claude just
+sketched in this conversation" — your only options with the plugin alone are:
+
+- Write the plan to a markdown file in the repo first, then run the
+  plugin (cumbersome, especially for throwaway planning sessions)
+- Misuse `/codex:rescue` (which is designed for delegating implementation,
+  not review)
+- Build something else
+
+`claude-plan-review` is the third option. It calls `codex exec` directly
+with the plan piped via stdin, so plans that live entirely in chat — never
+as a file — can be adversarially reviewed without round-tripping through
+git.
+
+### Bonus: context-preserving resume between iterations
+
+Beyond the file-vs-chat gap, the plugin also starts a fresh Codex thread
+on every invocation. That works fine for one-shot code review, but breaks
+down when you want to *iterate* on a plan:
 
 - Each fresh round produces a different finding set on the same unchanged
   plan (we tested this — three runs gave three different lists)
@@ -33,9 +51,9 @@ work for iterative *plan* review:
   earlier concerns were addressed
 - Token cost grows linearly with iterations (no delta optimization)
 
-`claude-plan-review` solves this by calling `codex exec` directly with
-session resume, so the reviewer keeps state between rounds and can give
-a meaningful "no remaining blockers" verdict.
+claude-plan-review captures Codex's session id from iter 1 and uses
+`codex exec resume <id>` for iters 2..N, so the reviewer keeps full
+context and can give a meaningful "no remaining or new blockers" verdict.
 
 ## Prerequisites
 
@@ -71,10 +89,32 @@ The installer symlinks two files and verifies prerequisites:
 Make sure `~/.local/bin` is in your `$PATH` (Ubuntu does this by default
 when the directory exists at login; reopen your shell if it didn't).
 
-Then reload Claude Code (`/reload-plugins` or restart) and try:
+Then **restart Claude Code** (slash commands are registered at startup,
+not on file change) and try:
 
 ```
 /plan-loop add a "copy link" button to the link detail page
+```
+
+### What goes in `$ARGUMENTS`
+
+`$ARGUMENTS` is the **feature description**, not the plan. Claude drafts
+plan-v1 from this short description; you don't paste a multi-paragraph
+plan into the slash command. Examples:
+
+- `/plan-loop add expiry dates to short URLs`
+- `/plan-loop migrate auth from sessions to JWT`
+- `/plan-loop split the monolith billing service into per-customer workers`
+
+If you already have a plan written somewhere and just want it reviewed,
+manually copy it to the workdir and run `plan-loop-step` directly:
+
+```bash
+WORKDIR=$(mktemp -d -t plan-loop-XXXXXXXX)
+chmod 700 "$WORKDIR"
+cp my-existing-plan.md "$WORKDIR/plan-v1.md"
+plan-loop-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
+# then iterate manually with plan-v2.md, plan-v3.md, etc.
 ```
 
 ## Recommended Codex configuration
