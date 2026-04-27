@@ -246,14 +246,21 @@ build_stdin_prompt() {
     printf '\n</plan>\n'
 }
 
-# --- Build Codex flag array ---
-# Always: --sandbox read-only (defense-in-depth — review never needs to write)
-# Always: --skip-git-repo-check (idempotent; permits non-repo project roots)
-# When PROJECT_ROOT set: -C <canonical-path> (Codex can read project files)
-CODEX_FLAGS=(--sandbox read-only --skip-git-repo-check)
+# --- Build Codex flag arrays ---
+# Initial `codex exec` accepts the full set:
+#   --sandbox read-only (defense-in-depth — review never needs to write)
+#   --skip-git-repo-check (idempotent; permits non-repo project roots)
+#   -C <canonical-path> (Codex can read project files; only when PROJECT_ROOT set)
+#
+# `codex exec resume` does NOT accept --sandbox or -C — those are inherited
+# from the session state captured during iter 1. Only --skip-git-repo-check
+# is valid on resume. Passing --sandbox/-C to resume causes Codex to abort
+# with "unexpected argument", which broke iter 2+ in v0.4.0.
+CODEX_INIT_FLAGS=(--sandbox read-only --skip-git-repo-check)
 if [[ -n "$PROJECT_ROOT_REAL" ]]; then
-    CODEX_FLAGS+=(-C "$PROJECT_ROOT_REAL")
+    CODEX_INIT_FLAGS+=(-C "$PROJECT_ROOT_REAL")
 fi
+CODEX_RESUME_FLAGS=(--skip-git-repo-check)
 
 echo "→ plan-review iter $ITER (workdir: $WORKDIR)" >&2
 
@@ -261,7 +268,7 @@ echo "→ plan-review iter $ITER (workdir: $WORKDIR)" >&2
 if (( ITER == 1 )); then
     # First round: new session, capture session id from output
     if ! build_stdin_prompt | codex exec \
-            "${CODEX_FLAGS[@]}" \
+            "${CODEX_INIT_FLAGS[@]}" \
             - > "$OUTPUT" 2>&1; then
         echo "ERROR: codex exec failed (iter 1). See $OUTPUT" >&2
         exit 3
@@ -278,7 +285,8 @@ if (( ITER == 1 )); then
     chmod 600 "$SESSION_FILE"
     echo "  session-id: $SESSION_ID" >&2
 else
-    # Resume — requires session id captured in iter 1
+    # Resume — requires session id captured in iter 1.
+    # Sandbox + project-root are inherited from the session, not re-passed.
     [[ -f "$SESSION_FILE" ]] || {
         echo "ERROR: $SESSION_FILE missing — was iter 1 run?" >&2
         exit 2
@@ -286,7 +294,7 @@ else
     SESSION_ID="$(cat "$SESSION_FILE")"
 
     if ! build_stdin_prompt | codex exec resume \
-            "${CODEX_FLAGS[@]}" \
+            "${CODEX_RESUME_FLAGS[@]}" \
             "$SESSION_ID" - > "$OUTPUT" 2>&1; then
         echo "ERROR: codex exec resume failed (iter $ITER). See $OUTPUT" >&2
         exit 3

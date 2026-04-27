@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-04-27 — Fix iter-2+ resume after v0.4.0
+
+### Fixed
+
+- **`codex exec resume` rejects `--sandbox` and `-C`.** v0.4.0 passed the
+  same flag set to both initial `codex exec` and `codex exec resume`,
+  causing iter 2+ to abort with `error: unexpected argument '--sandbox'
+  found`. Loops with MAX_ITER=1 worked fine; any plan that needed a
+  second round failed. Sandbox mode and working directory are session
+  state — they're inherited from iter 1 and must not be re-passed on
+  resume. `plan-review-step` now uses two distinct flag arrays
+  (`CODEX_INIT_FLAGS` for `codex exec`, `CODEX_RESUME_FLAGS` for
+  `codex exec resume`); only `--skip-git-repo-check` is shared.
+
+### Notes
+
+- No security regression: read-only sandbox set on iter 1 still applies
+  for the entire session, including resumed iterations.
+- Caught by running `/plan-review` end-to-end on a real plan after the
+  v0.4.0 release. v0.4.0 install.sh's no-arg verification only confirmed
+  the binary printed usage — it didn't exercise resume.
+
 ## [0.4.0] — 2026-04-27 — Project-aware review, stricter convergence
 
 ### Added
