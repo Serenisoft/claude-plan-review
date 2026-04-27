@@ -93,8 +93,10 @@ echo "  $BIN_LINK → $REPO_DIR/scripts/plan-loop-step.sh"
 echo
 echo "→ Verifying install"
 if [[ -L "$SLASH_LINK" ]] && [[ -L "$BIN_LINK" ]]; then
-    if "$BIN_LINK" 2>&1 | grep -q "Usage:"; then
-        echo "  plan-loop-step responds to --help: OK"
+    # plan-loop-step prints usage to stderr (correct), so capture both streams.
+    # We tolerate exit code 2 (user error) since that's exactly what no-args triggers.
+    if "$BIN_LINK" 2>&1 1>/dev/null | grep -q "Usage:"; then
+        echo "  plan-loop-step prints usage: OK"
     else
         echo "  WARNING: plan-loop-step did not print usage as expected"
     fi
