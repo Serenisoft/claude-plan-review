@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# plan-loop-step.sh
+# plan-review-step.sh
 #
 # Run ONE iteration of the plan-review loop against Codex.
-# Called from the /plan-loop slash command, once per iteration.
+# Called from the /plan-review slash command, once per iteration.
 # Holds state in <workdir>.
 #
 # Usage:
-#   plan-loop-step <workdir> <iter-nr> <plan-file>
+#   plan-review-step <workdir> <iter-nr> <plan-file>
 #
 # Arguments:
 #   <workdir>    Directory created by the calling slash command
@@ -171,7 +171,7 @@ build_stdin_prompt() {
     printf '\n</plan>\n'
 }
 
-echo "→ plan-loop iter $ITER (workdir: $WORKDIR)" >&2
+echo "→ plan-review iter $ITER (workdir: $WORKDIR)" >&2
 
 # Use noclobber-safe redirection for OUTPUT
 if (( ITER == 1 )); then

@@ -1,6 +1,6 @@
-# Workdir output from plan-loop runs (when run from inside this repo)
+# Workdir output from plan-review runs (when run from inside this repo)
 /tmp/
-plan-loop-*/
+plan-review-*/
 
 # Editor / OS
 .DS_Store

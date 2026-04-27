@@ -15,7 +15,7 @@ they're actually fixed.
 between rounds and `PLAN OK` becomes a meaningful convergence signal.
 
 ```
-/plan-loop add expiry dates to short URLs
+/plan-review add expiry dates to short URLs
 
   iter 1  → Codex finds 4 blockers
   iter 2  → Claude revises plan, Codex sees the changes (resumed thread),
@@ -69,14 +69,14 @@ context and can give a meaningful "no remaining or new blockers" verdict.
 |------|-----|----------------|
 | [Codex CLI](https://github.com/openai/codex) v0.118+ | Runs the review (`codex exec resume` requires this version) | `npm install -g @openai/codex` (needs Node 18.18+) |
 | ChatGPT account | Codex auth | Run `codex login` after install (opens browser); or set `OPENAI_API_KEY` |
-| [Claude Code](https://claude.com/claude-code) 2.x | Hosts the `/plan-loop` slash command | Follow the [official install guide](https://docs.anthropic.com/en/docs/claude-code) |
+| [Claude Code](https://claude.com/claude-code) 2.x | Hosts the `/plan-review` slash command | Follow the [official install guide](https://docs.anthropic.com/en/docs/claude-code) |
 | `bash` 4+, `awk`, `grep`, `mktemp` | Standard on Linux/macOS | (already installed) |
 
 ### Recommended (not required)
 
 The [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc)
 plugin gives you `/codex:review`, `/codex:rescue`, and other commands that
-complement plan-loop nicely. They are independent — plan-loop does not
+complement plan-review nicely. They are independent — plan-review does not
 depend on the plugin — but most users want both.
 
 ## Install
@@ -91,8 +91,8 @@ The installer symlinks two files and verifies prerequisites:
 
 | Source | Destination |
 |--------|-------------|
-| `commands/plan-loop.md` | `~/.claude/commands/plan-loop.md` |
-| `scripts/plan-loop-step.sh` | `~/.local/bin/plan-loop-step` |
+| `commands/plan-review.md` | `~/.claude/commands/plan-review.md` |
+| `scripts/plan-review-step.sh` | `~/.local/bin/plan-review-step` |
 
 Make sure `~/.local/bin` is in your `$PATH` (Ubuntu does this by default
 when the directory exists at login; reopen your shell if it didn't).
@@ -101,12 +101,12 @@ Then **restart Claude Code** (slash commands are registered at startup,
 not on file change) and try:
 
 ```
-/plan-loop add a "copy link" button to the link detail page
+/plan-review add a "copy link" button to the link detail page
 ```
 
 ### Three ways to invoke
 
-The `/plan-loop` command works in three modes. Pick the one that fits
+The `/plan-review` command works in three modes. Pick the one that fits
 your situation.
 
 #### A — Discuss first, then review (most common in practice)
@@ -115,7 +115,7 @@ plan in mind from the conversation. You want it reviewed.
 ```
 [20 min of conversation about the feature, edge cases, options...]
 [Claude proposes a plan]
-/plan-loop
+/plan-review
 ```
 Claude uses the conversation as the basis for plan-v1. `$ARGUMENTS` is
 empty.
@@ -123,7 +123,7 @@ empty.
 #### B — Jump straight to planning (fastest)
 You know what you want. No back-and-forth needed first.
 ```
-/plan-loop add expiry dates to short URLs
+/plan-review add expiry dates to short URLs
 ```
 Claude drafts plan-v1 from scratch based on the feature description.
 
@@ -132,7 +132,7 @@ You've talked it through, but you know exactly where you want Codex to
 push hardest.
 ```
 [conversation about the feature]
-/plan-loop especially scrutinize the rollout strategy and security
+/plan-review especially scrutinize the rollout strategy and security
 ```
 Claude uses the conversation as the basis for plan-v1, with `$ARGUMENTS`
 as a weighted focus area for both the plan and the review.
@@ -140,13 +140,13 @@ as a weighted focus area for both the plan and the review.
 ### Reviewing a pre-existing plan file
 
 If your plan is already written somewhere, skip the slash command and
-run `plan-loop-step` directly:
+run `plan-review-step` directly:
 
 ```bash
-WORKDIR=$(mktemp -d -t plan-loop-XXXXXXXX)
+WORKDIR=$(mktemp -d -t plan-review-XXXXXXXX)
 chmod 700 "$WORKDIR"
 cp my-existing-plan.md "$WORKDIR/plan-v1.md"
-plan-loop-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
+plan-review-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
 # then iterate manually with plan-v2.md, plan-v3.md, etc.
 ```
 
@@ -204,7 +204,7 @@ are:
   — a plan author cannot forge a verdict that gets accepted.
 - The slash command's `allowed-tools` is scoped to a small set of
   filesystem and runner commands — not `Bash(*)`.
-- `plan-loop-step.sh` validates the workdir's owner and exact mode
+- `plan-review-step.sh` validates the workdir's owner and exact mode
   (700) before writing, refuses symlink targets, and uses noclobber
   redirection throughout.
 
@@ -261,17 +261,17 @@ you have two options:
 
 ## How it works
 
-1. **Step 1** — Slash command creates a workdir with `mktemp -d -t plan-loop-XXXXXXXX`
+1. **Step 1** — Slash command creates a workdir with `mktemp -d -t plan-review-XXXXXXXX`
    (mode 700, not world-readable).
 2. **Step 2** — Claude drafts `plan-v1.md` in the workdir.
-3. **Step 3 (iter 1)** — `plan-loop-step` calls `codex exec` with the
+3. **Step 3 (iter 1)** — `plan-review-step` calls `codex exec` with the
    adversarial prompt and the plan. Output is captured to `iter-1.txt`,
    the Codex session id is grepped from the output and stored in
    `.session-id`. Verdict (`PLAN_OK` or `FINDINGS`) is written to
    `verdict-1.txt`.
 4. **Step 4 (iters 2..N)** — Claude reads `iter-N-1.txt`, judges each
    finding, revises the plan to a new `plan-vN.md`, and runs
-   `plan-loop-step` again. The script calls `codex exec resume <session-id>`
+   `plan-review-step` again. The script calls `codex exec resume <session-id>`
    so Codex keeps full context of the prior rounds.
 5. **Step 5** — Loop ends on `PLAN OK` (last non-empty line, exact match)
    or when iter 5 finishes with findings. The workdir is preserved as an
@@ -322,11 +322,11 @@ claude-plan-review/
 ├── CONTRIBUTING.md
 ├── install.sh                 ← symlinks and verifies prerequisites
 ├── commands/
-│   └── plan-loop.md           ← Claude Code slash command
+│   └── plan-review.md           ← Claude Code slash command
 ├── prompts/
 │   └── adversarial-prompt.md  ← review prompt template (English)
 └── scripts/
-    └── plan-loop-step.sh      ← one iteration per call
+    └── plan-review-step.sh      ← one iteration per call
 ```
 
 ## Troubleshooting
@@ -352,10 +352,10 @@ the version of Codex you're running.
 - Some plans simply need design rework; consider whether the persistent
   finding is a real problem or a difference of opinion
 
-### Permission denied on `~/.local/bin/plan-loop-step`
+### Permission denied on `~/.local/bin/plan-review-step`
 The installer should chmod +x automatically. If not:
 ```bash
-chmod +x ~/.local/bin/plan-loop-step
+chmod +x ~/.local/bin/plan-review-step
 ```
 
 ## Limitations
@@ -366,7 +366,7 @@ chmod +x ~/.local/bin/plan-loop-step
   revision between rounds; the script only handles the Codex side.
 - **Workdirs accumulate**. The audit trail design means stale workdirs
   pile up in `/tmp` (or wherever `mktemp` puts them on your OS). Cron a
-  cleanup if you run `/plan-loop` heavily.
+  cleanup if you run `/plan-review` heavily.
 
 ## License
 
@@ -375,7 +375,7 @@ MIT — see [LICENSE](LICENSE).
 ## Related projects
 
 - [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) —
-  official Codex plugin for Claude Code; complements plan-loop
+  official Codex plugin for Claude Code; complements plan-review
 - [`hamelsmu/claude-review-loop`](https://github.com/hamelsmu/claude-review-loop) —
   automated *code* review loop with Codex, plugin form
 - [`serbanghita/claude-code-plan-critique`](https://github.com/serbanghita/claude-code-plan-critique) —

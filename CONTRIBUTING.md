@@ -13,13 +13,13 @@ Thanks for your interest. A few notes to set expectations:
 When opening an issue, include:
 
 - Output of `codex --version` and `claude --version`
-- The exact `/plan-loop` invocation you used
+- The exact `/plan-review` invocation you used
 - The contents of `iter-N.txt` from the workdir if a Codex call failed
 - What you expected to happen vs. what actually happened
 
 ## Suggesting features
 
-Plan-loop has a deliberately small surface area. Before suggesting a
+plan-review has a deliberately small surface area. Before suggesting a
 feature, consider whether it really belongs here or in a wrapper script
 on top. Strong candidates:
 
@@ -31,7 +31,7 @@ on top. Strong candidates:
 
 - Keep changes focused. One logical change per PR.
 - Update `CHANGELOG.md` under the `[Unreleased]` section.
-- Make sure `bash -n scripts/plan-loop-step.sh` passes.
+- Make sure `bash -n scripts/plan-review-step.sh` passes.
 - If you change the prompt template or the slash command, run the loop
   end-to-end at least once before submitting.
 

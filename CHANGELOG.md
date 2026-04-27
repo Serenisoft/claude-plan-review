@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-27 — Breaking: rename to /plan-review
+
+### Changed (breaking)
+
+- The slash command was renamed from `/plan-loop` to `/plan-review` to
+  match the repository name and the dominant search term in this niche.
+  The old name was a description of mechanism ("a loop of reviews")
+  rather than purpose ("a review of plans"). Repo name now matches the
+  slash name now matches the binary name.
+- The shell driver was renamed from `plan-loop-step` to
+  `plan-review-step`. Same reasoning.
+- File renames: `commands/plan-loop.md` → `commands/plan-review.md`,
+  `scripts/plan-loop-step.sh` → `scripts/plan-review-step.sh`.
+
+### Migration
+
+- Run `bash install.sh` from the new checkout. The installer detects
+  legacy `~/.claude/commands/plan-loop.md` and `~/.local/bin/plan-loop-step`
+  symlinks pointing into this repo and removes them automatically. It
+  leaves alone any legacy symlinks pointing elsewhere.
+- Restart Claude Code afterward — slash commands are registered at
+  startup, not at `/reload-plugins`.
+- The internal "review loop" concept survives in prose. Workdir prefix
+  changed from `plan-loop-` to `plan-review-` (cosmetic).
+
+### Notes
+
+- No functional or behavioral changes. Same prompt template, same
+  iteration logic, same verdict mechanism.
+- This is a one-off breaking rename with no backward-compatibility
+  alias. The user count is small enough that a clean break is cleaner
+  than a deprecation cycle.
+
 ## [0.2.1] — 2026-04-27
 
 ### Fixed
@@ -165,7 +198,8 @@ review of the v0.1.4 codebase. Anyone running v0.1.x should upgrade.
 - Session id is captured explicitly from iter 1 output and reused for all
   resume calls (not `--last`, which is not concurrency-safe).
 
-[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Serenisoft/claude-plan-review/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Serenisoft/claude-plan-review/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/Serenisoft/claude-plan-review/compare/v0.1.3...v0.1.4

@@ -2,8 +2,8 @@
 # install.sh — install or uninstall claude-plan-review.
 #
 # Symlinks:
-#   commands/plan-loop.md       → ~/.claude/commands/plan-loop.md
-#   scripts/plan-loop-step.sh   → ~/.local/bin/plan-loop-step
+#   commands/plan-review.md       → ~/.claude/commands/plan-review.md
+#   scripts/plan-review-step.sh   → ~/.local/bin/plan-review-step
 #
 # Usage:
 #   bash install.sh              install (refuses to overwrite foreign files)
@@ -17,11 +17,17 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMMANDS_DST="$HOME/.claude/commands"
 BIN_DST="$HOME/.local/bin"
-SLASH_LINK="$COMMANDS_DST/plan-loop.md"
-BIN_LINK="$BIN_DST/plan-loop-step"
+SLASH_LINK="$COMMANDS_DST/plan-review.md"
+BIN_LINK="$BIN_DST/plan-review-step"
 
-SLASH_TARGET="$REPO_DIR/commands/plan-loop.md"
-BIN_TARGET="$REPO_DIR/scripts/plan-loop-step.sh"
+SLASH_TARGET="$REPO_DIR/commands/plan-review.md"
+BIN_TARGET="$REPO_DIR/scripts/plan-review-step.sh"
+
+# Legacy symlinks from versions before v0.3.0. We remove them on install
+# if they point into our repo, so users don't end up with both a stale
+# /plan-loop and the new /plan-review.
+LEGACY_SLASH_LINK="$COMMANDS_DST/plan-loop.md"
+LEGACY_BIN_LINK="$BIN_DST/plan-loop-step"
 
 FORCE=0
 
@@ -138,11 +144,11 @@ fi
 echo "  codex: $(codex --version 2>&1 | head -1)"
 
 # claude CLI (warn but don't block — useful for non-Claude-Code users
-# who want to run plan-loop-step manually)
+# who want to run plan-review-step manually)
 if command -v claude >/dev/null 2>&1; then
     echo "  claude: $(claude --version 2>&1)"
 else
-    echo "  claude: NOT FOUND (optional — only needed for the /plan-loop slash command)"
+    echo "  claude: NOT FOUND (optional — only needed for the /plan-review slash command)"
 fi
 
 # ~/.local/bin in PATH?
@@ -159,6 +165,23 @@ case ":$PATH:" in
 EOF
         ;;
 esac
+
+# --- Remove legacy symlinks from before v0.3.0 ---
+echo
+echo "→ Removing legacy /plan-loop symlinks (if any point into this repo)"
+for legacy in "$LEGACY_SLASH_LINK" "$LEGACY_BIN_LINK"; do
+    if [[ -L "$legacy" ]]; then
+        target="$(readlink "$legacy")"
+        case "$target" in
+            "$REPO_DIR"/*)
+                rm -v "$legacy"
+                ;;
+            *)
+                echo "  $legacy → $target — not ours, leaving alone" >&2
+                ;;
+        esac
+    fi
+done
 
 # --- Safety check destinations ---
 echo
@@ -180,13 +203,13 @@ echo "  $BIN_LINK → $BIN_TARGET"
 echo
 echo "→ Verifying install"
 if [[ -L "$SLASH_LINK" ]] && [[ -L "$BIN_LINK" ]]; then
-    # plan-loop-step prints usage to stderr and exits 2 on no-args.
+    # plan-review-step prints usage to stderr and exits 2 on no-args.
     # Capture both streams into a variable so we don't fight pipefail.
     verify_output="$("$BIN_LINK" 2>&1 || true)"
     if [[ "$verify_output" == *"Usage:"* ]]; then
-        echo "  plan-loop-step prints usage: OK"
+        echo "  plan-review-step prints usage: OK"
     else
-        echo "  WARNING: plan-loop-step did not print usage as expected"
+        echo "  WARNING: plan-review-step did not print usage as expected"
     fi
 fi
 
@@ -196,7 +219,7 @@ cat <<EOF
 
 Next steps:
   1. Restart Claude Code (slash commands are loaded at startup, not at /reload-plugins).
-  2. Verify the slash command is available: /plan-loop
+  2. Verify the slash command is available: /plan-review
   3. Configure ~/.codex/config.toml:
         model = "gpt-5.5"
         model_reasoning_effort = "high"
@@ -205,7 +228,7 @@ Next steps:
         # danger-full-access if you understand the prompt-injection
         # implications and accept the risk for your environment.
   4. Try it:
-        /plan-loop add expiry dates to short URLs
+        /plan-review add expiry dates to short URLs
 
 Uninstall: bash install.sh --uninstall
 EOF

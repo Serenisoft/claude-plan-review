@@ -1,7 +1,7 @@
 ---
 description: Iterative plan review where Codex (gpt-5.5 high) acts as an adversarial reviewer. Converges on "PLAN OK" or stops at max 5 iterations.
 argument-hint: [optional feature description or focus instruction]
-allowed-tools: Bash(mktemp:*), Bash(chmod:*), Bash(plan-loop-step:*), Bash(rm:*), Bash(cat:*), Bash(ls:*), Bash(echo:*), Read, Write
+allowed-tools: Bash(mktemp:*), Bash(chmod:*), Bash(plan-review-step:*), Bash(rm:*), Bash(cat:*), Bash(ls:*), Bash(echo:*), Read, Write
 ---
 
 You will draft a thorough plan and iterate on it with Codex acting as an
@@ -34,7 +34,7 @@ ask the user what they want planned before doing anything else.
 ## Step 1 — Setup
 Create an isolated workdir with safe permissions:
 ```bash
-WORKDIR=$(mktemp -d -t plan-loop-XXXXXXXX)
+WORKDIR=$(mktemp -d -t plan-review-XXXXXXXX)
 chmod 700 "$WORKDIR"
 echo "$WORKDIR"
 ```
@@ -50,7 +50,7 @@ Write the plan to `$WORKDIR/plan-v1.md`.
 
 ## Step 3 — Iter 1 (fresh Codex session)
 ```bash
-plan-loop-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
+plan-review-step "$WORKDIR" 1 "$WORKDIR/plan-v1.md"
 ```
 Inspect the exit code:
 - `0` → "PLAN OK" found, jump to Step 5 (wrap-up)
@@ -69,7 +69,7 @@ Repeat until "PLAN OK" or iter=5:
 3. Write `$WORKDIR/plan-vN.md` (full new version, not a diff).
 4. Run:
    ```bash
-   plan-loop-step "$WORKDIR" $N "$WORKDIR/plan-vN.md"
+   plan-review-step "$WORKDIR" $N "$WORKDIR/plan-vN.md"
    ```
 5. Inspect the exit code as in Step 3.
 
